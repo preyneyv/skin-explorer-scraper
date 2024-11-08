@@ -16,7 +16,7 @@ export const MIN_SUPPORTED_VERSION = [7, 1];
 export const REVALIDATE_INTERVAL = 60;
 
 /* Skin Changes Scraping */
-export const ALIASES = {
+export const ALIASES: Record<string, string> = {
   "Nunu Bot": "Nunu & Willump Bot",
 };
 
@@ -29,6 +29,10 @@ export const IGNORED_WARNINGS = [
 
 export const SKIN_SCRAPE_INTERVAL = 3600; // 1 hour
 
-export const SUBSTITUTIONS = {
+export const SUBSTITUTIONS: Record<string, string> = {
   monkeyking: "wukong",
+};
+
+export const WIKI_SUBSTITUTIONS: Record<string, string> = {
+  "Nunu & Willump": "Nunu",
 };

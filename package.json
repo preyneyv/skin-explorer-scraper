@@ -5,15 +5,26 @@
   "private": true,
   "dependencies": {
     "axios": "^0.24.0",
+    "axios-retry": "^4.5.0",
     "cheerio": "^1.0.0-rc.10",
     "dotenv": "^10.0.0",
     "fuse.js": "^6.4.6",
     "ioredis": "^4.28.2",
     "lodash": "^4.17.21",
-    "p-limit": "^4.0.0",
-    "redis-json": "^6.0.2"
+    "p-limit": "^4.0.0"
   },
   "engines": {
-    "node": "16.x"
+    "node": "20.x"
+  },
+  "devDependencies": {
+    "@types/ioredis": "^4.28.10",
+    "@types/lodash": "^4.17.13",
+    "@types/node": "^22.9.0",
+    "prettier": "3.3.3",
+    "tsx": "^4.19.2"
+  },
+  "scripts": {
+    "start": "tsx index.ts",
+    "prettier": "prettier --write ."
   }
 }
