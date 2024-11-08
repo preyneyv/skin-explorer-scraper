@@ -77,4 +77,4 @@ export class RedisCache implements Cache {
   }
 }
 
-export const cache = new RedisCache();
+export default RedisCache;

@@ -5,8 +5,9 @@ import { FileCache as Cache } from "./lib/cache";
 import { CDRAGON, SKIN_SCRAPE_INTERVAL } from "./constants";
 import { fetchSkinChanges } from "./lib/skin-changes";
 import { substitute } from "./lib/helpers";
-import { Champion, Skinline, Skins, Universe } from "./types";
+import { Champion, LanguageZone, Skinline, Skins, Universe } from "./types";
 import { exit } from "process";
+import { LangAssets } from "./types/languagezone";
 
 axiosRetry(axios, {
   retries: 4,
@@ -15,12 +16,15 @@ axiosRetry(axios, {
 
 const cache = new Cache();
 
-const dataURL = (p: string, patch = "pbe") =>
-  `${CDRAGON}/${patch}/plugins/rcp-be-lol-game-data/global/default${p}`;
+const dataURL = (p: string, patch = "pbe", lang = LanguageZone.Default) =>
+  `${CDRAGON}/${patch}/plugins/rcp-be-lol-game-data/global/${lang}${p}`;
 
-async function getLatestChampions(patch = "pbe"): Promise<Champion[]> {
+async function getLatestChampions(
+  patch = "pbe",
+  lang = LanguageZone.Default,
+): Promise<Champion[]> {
   const data: Champion[] = (
-    await axios.get(dataURL("/v1/champion-summary.json", patch))
+    await axios.get(dataURL("/v1/champion-summary.json", patch, lang))
   ).data;
   console.log(`[CDragon] [${patch}] Loaded champions.`);
   return data
@@ -29,9 +33,12 @@ async function getLatestChampions(patch = "pbe"): Promise<Champion[]> {
     .map((a) => ({ ...a, key: substitute(a.alias.toLowerCase()) }));
 }
 
-async function getLatestUniverses(patch = "pbe"): Promise<Universe[]> {
+async function getLatestUniverses(
+  patch = "pbe",
+  lang = LanguageZone.Default,
+): Promise<Universe[]> {
   const data: Universe[] = (
-    await axios.get(dataURL("/v1/universes.json", patch))
+    await axios.get(dataURL("/v1/universes.json", patch, lang))
   ).data;
   console.log(`[CDragon] [${patch}] Loaded universes.`);
 
@@ -40,9 +47,12 @@ async function getLatestUniverses(patch = "pbe"): Promise<Universe[]> {
     .sort((a, b) => (a.name > b.name ? 1 : -1));
 }
 
-async function getLatestSkinlines(patch = "pbe"): Promise<Skinline[]> {
+async function getLatestSkinlines(
+  patch = "pbe",
+  lang = LanguageZone.Default,
+): Promise<Skinline[]> {
   const data: Skinline[] = (
-    await axios.get(dataURL("/v1/skinlines.json", patch))
+    await axios.get(dataURL("/v1/skinlines.json", patch, lang))
   ).data;
   console.log(`[CDragon] [${patch}] Loaded skinlines.`);
 
@@ -51,8 +61,12 @@ async function getLatestSkinlines(patch = "pbe"): Promise<Skinline[]> {
     .sort((a, b) => (a.name > b.name ? 1 : -1));
 }
 
-async function getLatestSkins(patch = "pbe"): Promise<Skins> {
-  const data: Skins = (await axios.get(dataURL("/v1/skins.json", patch))).data;
+async function getLatestSkins(
+  patch = "pbe",
+  lang = LanguageZone.Default,
+): Promise<Skins> {
+  const data: Skins = (await axios.get(dataURL("/v1/skins.json", patch, lang)))
+    .data;
   console.log(`[CDragon] [${patch}] Loaded skins.`);
 
   Object.keys(data).map((id) => {
@@ -76,12 +90,13 @@ async function getLatestSkins(patch = "pbe"): Promise<Skins> {
 
 async function getLatestPatchData(
   patch = "pbe",
+  lang = LanguageZone.Default,
 ): Promise<[Champion[], Skinline[], Skins, Universe[]]> {
   return await Promise.all([
-    getLatestChampions(patch),
-    getLatestSkinlines(patch),
-    getLatestSkins(patch),
-    getLatestUniverses(patch),
+    getLatestChampions(patch, lang),
+    getLatestSkinlines(patch, lang),
+    getLatestSkins(patch, lang),
+    getLatestUniverses(patch, lang),
   ]);
 }
 
@@ -105,7 +120,7 @@ async function getAdded(
   };
 }
 
-async function scrape() {
+async function scrape(langs_extra: LanguageZone[] = []) {
   let shouldRebuild = false;
   const { lastUpdate, oldVersionString } = await cache.get("persistentVars", {
     lastUpdate: 0,
@@ -118,6 +133,13 @@ async function scrape() {
   let skins: Skins | null = null;
   let universes: Universe[] | null = null;
 
+  let champions_dict: LangAssets<Champion[]> = {};
+  let skinlines_dict: LangAssets<Skinline[]> = {};
+  let skins_dict: LangAssets<Skins> = {};
+  let universes_dict: LangAssets<Universe[]> = {};
+
+  const all_langs = langs_extra.concat(LanguageZone.Default);
+
   // Check to see if patch changed.
   const metadata: { version: String } = (
     await axios.get(CDRAGON + "/pbe/content-metadata.json")
@@ -128,16 +150,37 @@ async function scrape() {
     );
   } else {
     // Patch changed!
-    [champions, skinlines, skins, universes] = await getLatestPatchData();
-    const added = await getAdded(champions, skinlines, skins, universes);
+    for (const lang of all_langs) {
+      console.log(
+        `[CDragon] Caching new patch data (${metadata.version}) for ${lang}...`,
+      );
+      const [champions, skinlines, skins, universes] = await getLatestPatchData(
+        "pbe",
+        lang,
+      );
+
+      if (lang === LanguageZone.Default) {
+        const added = await getAdded(champions, skinlines, skins, universes);
+        await cache.set("added", added);
+      }
+
+      champions_dict[lang] = champions;
+      skinlines_dict[lang] = skinlines;
+      skins_dict[lang] = skins;
+      universes_dict[lang] = universes;
+    }
 
     await Promise.all([
-      cache.set("champions", champions),
-      cache.set("skinlines", skinlines),
-      cache.set("skins", skins),
-      cache.set("universes", universes),
-      cache.set("added", added),
+      cache.set("champions", champions_dict),
+      cache.set("skinlines", skinlines_dict),
+      cache.set("skins", skins_dict),
+      cache.set("universes", universes_dict),
     ]);
+
+    await cache.set(
+      "supportedLanguages",
+      langs_extra.concat(LanguageZone.Default),
+    );
     console.log("[CDragon] Cache updated.");
     shouldRebuild = true;
   }
@@ -175,7 +218,8 @@ async function scrape() {
 }
 
 async function main() {
-  const shouldRebuild = await scrape();
+  const langs_extra = [LanguageZone.ChineseChina];
+  const shouldRebuild = await scrape(langs_extra);
   if (shouldRebuild) {
     if (!process.env.DEPLOY_HOOK)
       return console.log("[Deploy] Need rebuild but no DEPLOY_HOOK provided.");
